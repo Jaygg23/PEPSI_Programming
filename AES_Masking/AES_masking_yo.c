@@ -1,0 +1,385 @@
+#define _CRT_SECURE_NO_WARNINGS
+#include <stdio.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <time.h>
+#include <string.h>
+#include "hal.h"
+#include "AES_masking_yo.h"
+
+//#define xtimes(input) (((input)<<1)^(((input)>>7)*0x1b)) // 함수
+#define xtimes(f) ((((f) >> 7 & 0x01) == 1) ? ((f) << 1) ^ 0x1b : (f) << 1) // 분기문
+
+typedef uint8_t AES_STATE_t[16]; // 128-bit block
+typedef uint8_t AES128_KEY_t[16]; // 128-bit masterkey
+
+const unsigned char AES_SBOX[256] = {
+        0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5, 0x30, 0x01, 0x67, 0x2b, 0xfe, 0xd7, 0xab, 0x76,
+        0xca, 0x82, 0xc9, 0x7d, 0xfa, 0x59, 0x47, 0xf0, 0xad, 0xd4, 0xa2, 0xaf, 0x9c, 0xa4, 0x72, 0xc0,
+        0xb7, 0xfd, 0x93, 0x26, 0x36, 0x3f, 0xf7, 0xcc, 0x34, 0xa5, 0xe5, 0xf1, 0x71, 0xd8, 0x31, 0x15,
+        0x04, 0xc7, 0x23, 0xc3, 0x18, 0x96, 0x05, 0x9a, 0x07, 0x12, 0x80, 0xe2, 0xeb, 0x27, 0xb2, 0x75,
+        0x09, 0x83, 0x2c, 0x1a, 0x1b, 0x6e, 0x5a, 0xa0, 0x52, 0x3b, 0xd6, 0xb3, 0x29, 0xe3, 0x2f, 0x84,
+        0x53, 0xd1, 0x00, 0xed, 0x20, 0xfc, 0xb1, 0x5b, 0x6a, 0xcb, 0xbe, 0x39, 0x4a, 0x4c, 0x58, 0xcf,
+        0xd0, 0xef, 0xaa, 0xfb, 0x43, 0x4d, 0x33, 0x85, 0x45, 0xf9, 0x02, 0x7f, 0x50, 0x3c, 0x9f, 0xa8,
+        0x51, 0xa3, 0x40, 0x8f, 0x92, 0x9d, 0x38, 0xf5, 0xbc, 0xb6, 0xda, 0x21, 0x10, 0xff, 0xf3, 0xd2,
+        0xcd, 0x0c, 0x13, 0xec, 0x5f, 0x97, 0x44, 0x17, 0xc4, 0xa7, 0x7e, 0x3d, 0x64, 0x5d, 0x19, 0x73,
+        0x60, 0x81, 0x4f, 0xdc, 0x22, 0x2a, 0x90, 0x88, 0x46, 0xee, 0xb8, 0x14, 0xde, 0x5e, 0x0b, 0xdb,
+        0xe0, 0x32, 0x3a, 0x0a, 0x49, 0x06, 0x24, 0x5c, 0xc2, 0xd3, 0xac, 0x62, 0x91, 0x95, 0xe4, 0x79,
+        0xe7, 0xc8, 0x37, 0x6d, 0x8d, 0xd5, 0x4e, 0xa9, 0x6c, 0x56, 0xf4, 0xea, 0x65, 0x7a, 0xae, 0x08,
+        0xba, 0x78, 0x25, 0x2e, 0x1c, 0xa6, 0xb4, 0xc6, 0xe8, 0xdd, 0x74, 0x1f, 0x4b, 0xbd, 0x8b, 0x8a,
+        0x70, 0x3e, 0xb5, 0x66, 0x48, 0x03, 0xf6, 0x0e, 0x61, 0x35, 0x57, 0xb9, 0x86, 0xc1, 0x1d, 0x9e,
+        0xe1, 0xf8, 0x98, 0x11, 0x69, 0xd9, 0x8e, 0x94, 0x9b, 0x1e, 0x87, 0xe9, 0xce, 0x55, 0x28, 0xdf,
+        0x8c, 0xa1, 0x89, 0x0d, 0xbf, 0xe6, 0x42, 0x68, 0x41, 0x99, 0x2d, 0x0f, 0xb0, 0x54, 0xbb, 0x16
+};
+const unsigned char RC[10] = {
+    0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1B, 0x36
+};
+unsigned char M_Sbox[256];
+
+void AddRoundKey(unsigned char string[], unsigned char key[])
+{
+    string[0] ^= key[0];
+    string[1] ^= key[1];
+    string[2] ^= key[2];
+    string[3] ^= key[3];
+    string[4] ^= key[4];
+    string[5] ^= key[5];
+    string[6] ^= key[6];
+    string[7] ^= key[7];
+    string[8] ^= key[8];
+    string[9] ^= key[9];
+    string[10] ^= key[10];
+    string[11] ^= key[11];
+    string[12] ^= key[12];
+    string[13] ^= key[13];
+    string[14] ^= key[14];
+    string[15] ^= key[15];
+
+    //print_value(string);
+}
+void SubBytes(unsigned char string[])
+{
+    string[0] = AES_SBOX[string[0]];
+    string[1] = AES_SBOX[string[1]];
+    string[2] = AES_SBOX[string[2]];
+    string[3] = AES_SBOX[string[3]];
+    string[4] = AES_SBOX[string[4]];
+    string[5] = AES_SBOX[string[5]];
+    string[6] = AES_SBOX[string[6]];
+    string[7] = AES_SBOX[string[7]];
+    string[8] = AES_SBOX[string[8]];
+    string[9] = AES_SBOX[string[9]];
+    string[10] = AES_SBOX[string[10]];
+    string[11] = AES_SBOX[string[11]];
+    string[12] = AES_SBOX[string[12]];
+    string[13] = AES_SBOX[string[13]];
+    string[14] = AES_SBOX[string[14]];
+    string[15] = AES_SBOX[string[15]];
+}
+void ShiftRows(unsigned char string[])
+{
+    unsigned char buf;
+
+    buf = string[1];
+    string[1] = string[5];
+    string[5] = string[9];
+    string[9] = string[13];
+    string[13] = buf;
+
+    buf = string[2];
+    string[2] = string[10];
+    string[10] = buf;
+    buf = string[6];
+    string[6] = string[14];
+    string[14] = buf;
+
+    buf = string[15];
+    string[15] = string[11];
+    string[11] = string[7];
+    string[7] = string[3];
+    string[3] = buf;
+
+    //print_value(string);
+}
+void MixColumns(unsigned char string[])
+{
+    unsigned char buf[4] = { 0x00, };
+
+    buf[0] = string[0];
+    buf[1] = string[1];
+    buf[2] = string[2];
+    buf[3] = string[3];
+    string[0] = xtimes((buf[0] ^ buf[1])) ^ buf[1] ^ buf[2] ^ buf[3];
+    string[1] = buf[0] ^ xtimes((buf[1] ^ buf[2])) ^ buf[2] ^ buf[3];
+    string[2] = buf[0] ^ buf[1] ^ xtimes((buf[2] ^ buf[3])) ^ buf[3];
+    string[3] = xtimes((buf[0] ^ buf[3])) ^ buf[0] ^ buf[1] ^ buf[2];
+
+    buf[0] = string[4];
+    buf[1] = string[5];
+    buf[2] = string[6];
+    buf[3] = string[7];
+    string[4] = xtimes((buf[0] ^ buf[1])) ^ buf[1] ^ buf[2] ^ buf[3];
+    string[5] = buf[0] ^ xtimes((buf[1] ^ buf[2])) ^ buf[2] ^ buf[3];
+    string[6] = buf[0] ^ buf[1] ^ xtimes((buf[2] ^ buf[3])) ^ buf[3];
+    string[7] = xtimes((buf[0] ^ buf[3])) ^ buf[0] ^ buf[1] ^ buf[2];
+
+    buf[0] = string[8];
+    buf[1] = string[9];
+    buf[2] = string[10];
+    buf[3] = string[11];
+    string[8] = xtimes((buf[0] ^ buf[1])) ^ buf[1] ^ buf[2] ^ buf[3];
+    string[9] = buf[0] ^ xtimes((buf[1] ^ buf[2])) ^ buf[2] ^ buf[3];
+    string[10] = buf[0] ^ buf[1] ^ xtimes((buf[2] ^ buf[3])) ^ buf[3];
+    string[11] = xtimes((buf[0] ^ buf[3])) ^ buf[0] ^ buf[1] ^ buf[2];
+
+    buf[0] = string[12];
+    buf[1] = string[13];
+    buf[2] = string[14];
+    buf[3] = string[15];
+    string[12] = xtimes((buf[0] ^ buf[1])) ^ buf[1] ^ buf[2] ^ buf[3];
+    string[13] = buf[0] ^ xtimes((buf[1] ^ buf[2])) ^ buf[2] ^ buf[3];
+    string[14] = buf[0] ^ buf[1] ^ xtimes((buf[2] ^ buf[3])) ^ buf[3];
+    string[15] = xtimes((buf[0] ^ buf[3])) ^ buf[0] ^ buf[1] ^ buf[2];
+
+    //print_value(string);
+}
+void KeySchedule128(unsigned char key[][16])
+{
+    int cnt_i;
+
+    for (cnt_i = 0; cnt_i < 10; cnt_i++)
+    {
+        key[cnt_i + 1][0] = key[cnt_i][0] ^ AES_SBOX[key[cnt_i][13]] ^ RC[cnt_i]; 
+        key[cnt_i + 1][1] = key[cnt_i][1] ^ AES_SBOX[key[cnt_i][14]];
+        key[cnt_i + 1][2] = key[cnt_i][2] ^ AES_SBOX[key[cnt_i][15]];
+        key[cnt_i + 1][3] = key[cnt_i][3] ^ AES_SBOX[key[cnt_i][12]];
+
+        key[cnt_i + 1][4] = key[cnt_i + 1][0] ^ key[cnt_i][4];
+        key[cnt_i + 1][5] = key[cnt_i + 1][1] ^ key[cnt_i][5];
+        key[cnt_i + 1][6] = key[cnt_i + 1][2] ^ key[cnt_i][6];
+        key[cnt_i + 1][7] = key[cnt_i + 1][3] ^ key[cnt_i][7];
+
+        key[cnt_i + 1][8] = key[cnt_i + 1][4] ^ key[cnt_i][8];
+        key[cnt_i + 1][9] = key[cnt_i + 1][5] ^ key[cnt_i][9];
+        key[cnt_i + 1][10] = key[cnt_i + 1][6] ^ key[cnt_i][10];
+        key[cnt_i + 1][11] = key[cnt_i + 1][7] ^ key[cnt_i][11];
+
+        key[cnt_i + 1][12] = key[cnt_i + 1][8] ^ key[cnt_i][12];
+        key[cnt_i + 1][13] = key[cnt_i + 1][9] ^ key[cnt_i][13];
+        key[cnt_i + 1][14] = key[cnt_i + 1][10] ^ key[cnt_i][14];
+        key[cnt_i + 1][15] = key[cnt_i + 1][11] ^ key[cnt_i][15];
+    }
+}
+
+/***********  마스킹 값 생성  **********/
+void make_masking_value(unsigned char* m, unsigned char* mp,unsigned char* m1, unsigned char* m2, unsigned char* m3, unsigned char* m4)
+{
+    
+    *m = (unsigned char)(rand() & 0xFF);
+    *mp = (unsigned char)(rand() & 0xFF);
+    *m1 = (unsigned char)(rand() & 0xFF);
+    *m2 = (unsigned char)(rand() & 0xFF);
+    *m3 = (unsigned char)(rand() & 0xFF);
+    *m4 = (unsigned char)(rand() & 0xFF);
+
+}
+void calculate_mp_value(unsigned char m1, unsigned char m2, unsigned char m3, unsigned char m4, unsigned char* m1p, unsigned char* m2p, unsigned char* m3p, unsigned char* m4p) {
+    unsigned char state[16] = { 0, };
+    
+    // 입력값 복사 (첫 번째 컬럼에만 사용)
+    state[0] = m1;
+    state[1] = m2;
+    state[2] = m3;
+    state[3] = m4;
+
+    //printf("유한체 곱셈 연산 된 mXp 값 : ");
+    MixColumns(state); // 연산
+
+    // 결과 추출
+    *m1p = state[0];
+    *m2p = state[1];
+    *m3p = state[2];
+    *m4p = state[3];
+}
+void build_msbox(uint8_t M_SBox[256], uint8_t m, uint8_t mp) { // MSBox 생성: M_SBox[x ^ m] = SBox(x) ^ m'
+    for (int x = 0; x < 256; x++) M_SBox[x ^ m] = AES_SBOX[(uint8_t)(x)] ^ mp;
+    // AddRoundKey를 지나면서 이미 x^m되었으므로 MSBox[x ^ m]는 마스킹이 벗겨진 x값
+}
+
+/***********  마스킹 적용 함수  **********/
+void Masked_Plaintext(unsigned char state[], unsigned char m1p, unsigned char m2p, unsigned char m3p, unsigned char m4p) {
+    state[0] ^= m1p;
+    state[1] ^= m2p;
+    state[2] ^= m3p;
+    state[3] ^= m4p;
+
+    state[4] ^= m1p;
+    state[5] ^= m2p;
+    state[6] ^= m3p;
+    state[7] ^= m4p;
+
+    state[8] ^= m1p;
+    state[9] ^= m2p;
+    state[10] ^= m3p;
+    state[11] ^= m4p;
+
+    state[12] ^= m1p;
+    state[13] ^= m2p;
+    state[14] ^= m3p;
+    state[15] ^= m4p;
+
+    //print_value(state);
+}
+void Masked_KeySchedule128(unsigned char key[][16], unsigned char m, unsigned char mp, unsigned char m1, unsigned char m2, unsigned char m3, unsigned char m4, unsigned char m1p, unsigned char m2p, unsigned char m3p, unsigned char m4p) {
+    int cnt_i;
+    unsigned char temp[8] = { 0, };
+
+    // 초기 마스킹: 마스터키에 ^mXp ^ m 적용
+    key[0][0] ^= (m1p ^ m);
+    key[0][1] ^= (m2p ^ m);
+    key[0][2] ^= (m3p ^ m);
+    key[0][3] ^= (m4p ^ m);
+
+    key[0][4] ^= (m1p ^ m);
+    key[0][5] ^= (m2p ^ m);
+    key[0][6] ^= (m3p ^ m);
+    key[0][7] ^= (m4p ^ m);
+
+    key[0][8] ^= (m1p ^ m);
+    key[0][9] ^= (m2p ^ m);
+    key[0][10] ^= (m3p ^ m);
+    key[0][11] ^= (m4p ^ m);
+
+    key[0][12] ^= (m1p ^ m);
+    key[0][13] ^= (m2p ^ m);
+    key[0][14] ^= (m3p ^ m);
+    key[0][15] ^= (m4p ^ m);
+
+    // 1~9라운드 키 생성
+    for (cnt_i = 0; cnt_i < 9; cnt_i++)
+    {
+        key[cnt_i + 1][0] = M_Sbox[key[cnt_i][13] ^ m2p] ^ RC[cnt_i] ^ key[cnt_i][0] ^ mp;
+        key[cnt_i + 1][1] = M_Sbox[key[cnt_i][14] ^ m3p] ^ (key[cnt_i][1] ^ mp);
+        key[cnt_i + 1][2] = M_Sbox[key[cnt_i][15] ^ m4p] ^ (key[cnt_i][2] ^ mp);
+        key[cnt_i + 1][3] = M_Sbox[key[cnt_i][12] ^ m1p] ^ (key[cnt_i][3] ^ mp);
+
+        key[cnt_i + 1][4] = (key[cnt_i + 1][0] ^ m1p) ^ (key[cnt_i][4] ^ m);
+        key[cnt_i + 1][5] = (key[cnt_i + 1][1] ^ m2p) ^ (key[cnt_i][5] ^ m);
+        key[cnt_i + 1][6] = (key[cnt_i + 1][2] ^ m3p) ^ (key[cnt_i][6] ^ m);
+        key[cnt_i + 1][7] = (key[cnt_i + 1][3] ^ m4p) ^ (key[cnt_i][7] ^ m);
+
+        key[cnt_i + 1][8] = (key[cnt_i + 1][4] ^ m1p) ^ (key[cnt_i][8] ^ m);
+        key[cnt_i + 1][9] = (key[cnt_i + 1][5] ^ m2p) ^ (key[cnt_i][9] ^ m);
+        key[cnt_i + 1][10] = (key[cnt_i + 1][6] ^ m3p) ^ (key[cnt_i][10] ^ m);
+        key[cnt_i + 1][11] = (key[cnt_i + 1][7] ^ m4p) ^ (key[cnt_i][11] ^ m);
+
+        key[cnt_i + 1][12] = (key[cnt_i + 1][8] ^ m) ^ (key[cnt_i][12] ^ m1p);
+        key[cnt_i + 1][13] = (key[cnt_i + 1][9] ^ m) ^ (key[cnt_i][13] ^ m2p);
+        key[cnt_i + 1][14] = (key[cnt_i + 1][10] ^ m) ^ (key[cnt_i][14] ^ m3p);
+        key[cnt_i + 1][15] = (key[cnt_i + 1][11] ^ m) ^ (key[cnt_i][15] ^ m4p);
+    }
+
+    /******************  10라운드 키  ******************/
+    // 임시 값 저장
+    temp[0] = M_Sbox[key[9][13] ^ m2p] ^ RC[9] ^ key[9][0];
+    temp[1] = M_Sbox[key[9][14] ^ m3p] ^ key[9][1];
+    temp[2] = M_Sbox[key[9][15] ^ m4p] ^ key[9][2];
+    temp[3] = M_Sbox[key[9][12] ^ m1p] ^ key[9][3];
+        
+    key[10][4] = temp[0] ^ key[9][4];
+    key[10][5] = temp[1] ^ key[9][5];
+    key[10][6] = temp[2] ^ key[9][6];
+    key[10][7] = temp[3] ^ key[9][7];
+
+    key[10][0] = temp[0] ^ (m1p ^ m);
+    key[10][1] = temp[1] ^ (m2p ^ m);
+    key[10][2] = temp[2] ^ (m3p ^ m);
+    key[10][3] = temp[3] ^ (m4p ^ m);
+        
+    temp[0] = key[10][4] ^ (key[9][8] ^ m1p);
+    temp[1] = key[10][5] ^ (key[9][9] ^ m2p);
+    temp[2] = key[10][6] ^ (key[9][10] ^ m3p);
+    temp[3] = key[10][7] ^ (key[9][11] ^ m4p);
+    
+    key[10][12] = temp[0] ^ (key[9][12] ^ m1p);
+    key[10][13] = temp[1] ^ (key[9][13] ^ m2p);
+    key[10][14] = temp[2] ^ (key[9][14] ^ m3p);
+    key[10][15] = temp[3] ^ (key[9][15] ^ m4p);
+
+    key[10][8] = temp[0] ^ m;
+    key[10][9] = temp[1] ^ m;
+    key[10][10] = temp[2] ^ m;
+    key[10][11] = temp[3] ^ m;
+
+}
+void Masked_SubBytes(unsigned char string[])
+{
+    string[0] = M_Sbox[string[0]];
+    string[1] = M_Sbox[string[1]];
+    string[2] = M_Sbox[string[2]];
+    string[3] = M_Sbox[string[3]];
+    string[4] = M_Sbox[string[4]];
+    string[5] = M_Sbox[string[5]];
+    string[6] = M_Sbox[string[6]];
+    string[7] = M_Sbox[string[7]];
+    string[8] = M_Sbox[string[8]];
+    string[9] = M_Sbox[string[9]];
+    string[10] = M_Sbox[string[10]];
+    string[11] = M_Sbox[string[11]];
+    string[12] = M_Sbox[string[12]];
+    string[13] = M_Sbox[string[13]];
+    string[14] = M_Sbox[string[14]];
+    string[15] = M_Sbox[string[15]];
+
+    //print_value(string);
+}
+void Masked_ShiftRows(unsigned char state[], unsigned char mp, unsigned char m1, unsigned char m2, unsigned char m3, unsigned char m4)
+{
+    volatile uint8_t mask0 = (m1 ^ mp);
+    volatile uint8_t mask1 = (m2 ^ mp);
+    volatile uint8_t mask2 = (m3 ^ mp);
+    volatile uint8_t mask3 = (m4 ^ mp);
+    
+    volatile unsigned char buf = 0;
+   
+    // 마스킹 값 계산 - (X ^ mp(입력값)) ^ m1 ^ mp == X ^ m1  (mp가 상쇄되지만, 계산 과정은 안전성을 위해 유지)
+    state[0] ^= mask0;
+    state[4] ^= mask0;
+    state[8] ^= mask0;
+    state[12] ^= mask0;
+    
+    // 기존 ShiftRows + Masking 적용
+    buf = state[1];
+    state[1] = state[5];
+    state[5] = state[9];
+    state[9] = state[13];
+    state[13] = buf;
+    state[1] ^= mask1; // M 적용
+    state[5] ^= mask1;
+    state[9] ^= mask1;
+    state[13] ^= mask1;
+
+    buf = state[2];
+    state[2] = state[10];
+    state[10] = buf;
+    buf = state[6];
+    state[6] = state[14];
+    state[14] = buf;
+    state[2] ^= mask2; // M 적용
+    state[6] ^= mask2;
+    state[10] ^= mask2;
+    state[14] ^= mask2;
+    
+    buf = state[15];
+    state[15] = state[11];
+    state[11] = state[7];
+    state[7] = state[3];
+    state[3] = buf;
+    state[3] ^= mask3; // M 적용
+    state[7] ^= mask3;
+    state[11] ^= mask3;
+    state[15] ^= mask3;
+   
+  
+    //print_value(state);
+}
