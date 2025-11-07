@@ -5,8 +5,8 @@
 #include <time.h>
 #include <string.h>
 
-//#define xtimes(input) (((input)<<1)^(((input)>>7)*0x1b)) // ÇÔ¼ö
-#define xtimes(f) ((((f) >> 7 & 0x01) == 1) ? ((f) << 1) ^ 0x1b : (f) << 1) // ºÐ±â¹®
+//#define xtimes(input) (((input)<<1)^(((input)>>7)*0x1b)) // í•¨ìˆ˜
+#define xtimes(f) ((((f) >> 7 & 0x01) == 1) ? ((f) << 1) ^ 0x1b : (f) << 1) // ë¶„ê¸°ë¬¸
 
 typedef uint8_t AES_STATE_t[16]; // 128-bit block
 typedef uint8_t AES128_KEY_t[16]; // 128-bit masterkey
@@ -176,7 +176,7 @@ void KeySchedule128(unsigned char key[][16])
     }
 }
 
-/***********  ¸¶½ºÅ· °ª »ý¼º  **********/
+/***********  ë§ˆìŠ¤í‚¹ ê°’ ìƒì„±  **********/
 void Masked_Plaintext(unsigned char state[], unsigned char m1p, unsigned char m2p, unsigned char m3p, unsigned char m4p) {
     state[0] ^= m1p;
     state[1] ^= m2p;
@@ -212,16 +212,16 @@ void make_masking_value(unsigned char* m, unsigned char* mp, unsigned char* m1, 
 void calculate_mp_value(unsigned char m1, unsigned char m2, unsigned char m3, unsigned char m4, unsigned char* m1p, unsigned char* m2p, unsigned char* m3p, unsigned char* m4p) {
     unsigned char state[16] = { 0, };
 
-    // ÀÔ·Â°ª º¹»ç (Ã¹ ¹øÂ° ÄÃ·³¿¡¸¸ »ç¿ë)
+    // ìž…ë ¥ê°’ ë³µì‚¬ (ì²« ë²ˆì§¸ ì»¬ëŸ¼ì—ë§Œ ì‚¬ìš©)
     state[0] = m1;
     state[1] = m2;
     state[2] = m3;
     state[3] = m4;
 
-    printf("À¯ÇÑÃ¼ °ö¼À ¿¬»ê µÈ mXp °ª : ");
-    MixColumns(state); // ¿¬»ê
+    printf("ìœ í•œì²´ ê³±ì…ˆ ì—°ì‚° ëœ mXp ê°’ : ");
+    MixColumns(state); // ì—°ì‚°
 
-    // °á°ú ÃßÃâ
+    // ê²°ê³¼ ì¶”ì¶œ
     *m1p = state[0];
     *m2p = state[1];
     *m3p = state[2];
@@ -242,17 +242,17 @@ void print_masking_values(unsigned char m, unsigned char mp, unsigned char m1, u
     printf("m4' = %02X\n", m4p);
     printf("=====================================\n\n");
 }
-void build_msbox(uint8_t M_SBox[256], uint8_t m, uint8_t mp) { // MSBox »ý¼º: M_SBox[x ^ m] = SBox(x) ^ m'
+void build_msbox(uint8_t M_SBox[256], uint8_t m, uint8_t mp) { // MSBox ìƒì„±: M_SBox[x ^ m] = SBox(x) ^ m'
     for (int x = 0; x < 256; x++) M_SBox[x ^ m] = AES_SBOX[(uint8_t)(x)] ^ mp;
-    // AddRoundKey¸¦ Áö³ª¸é¼­ ÀÌ¹Ì x^mµÇ¾úÀ¸¹Ç·Î MSBox[x ^ m]´Â ¸¶½ºÅ·ÀÌ ¹þ°ÜÁø x°ª
+    // AddRoundKeyë¥¼ ì§€ë‚˜ë©´ì„œ ì´ë¯¸ x^më˜ì—ˆìœ¼ë¯€ë¡œ MSBox[x ^ m]ëŠ” ë§ˆìŠ¤í‚¹ì´ ë²—ê²¨ì§„ xê°’
 }
 
-/***********  ¸¶½ºÅ· Àû¿ë ÇÔ¼ö  **********/
+/***********  ë§ˆìŠ¤í‚¹ ì ìš© í•¨ìˆ˜  **********/
 void Masked_KeySchedule128(unsigned char key[][16], unsigned char m, unsigned char mp, unsigned char m1, unsigned char m2, unsigned char m3, unsigned char m4, unsigned char m1p, unsigned char m2p, unsigned char m3p, unsigned char m4p) {
     int cnt_i;
     unsigned char temp[8] = { 0, };
 
-    // ÃÊ±â ¸¶½ºÅ·: ¸¶½ºÅÍÅ°¿¡ ^mXp ^ m Àû¿ë
+    // ì´ˆê¸° ë§ˆìŠ¤í‚¹: ë§ˆìŠ¤í„°í‚¤ì— ^mXp ^ m ì ìš©
     key[0][0] ^= (m1p ^ m);
     key[0][1] ^= (m2p ^ m);
     key[0][2] ^= (m3p ^ m);
@@ -273,7 +273,7 @@ void Masked_KeySchedule128(unsigned char key[][16], unsigned char m, unsigned ch
     key[0][14] ^= (m3p ^ m);
     key[0][15] ^= (m4p ^ m);
 
-    // 1~9¶ó¿îµå Å° »ý¼º
+    // 1~9ë¼ìš´ë“œ í‚¤ ìƒì„±
     for (cnt_i = 0; cnt_i < 9; cnt_i++)
     {
         key[cnt_i + 1][0] = M_Sbox[key[cnt_i][13] ^ m2p] ^ RC[cnt_i] ^ key[cnt_i][0] ^ mp;
@@ -297,8 +297,8 @@ void Masked_KeySchedule128(unsigned char key[][16], unsigned char m, unsigned ch
         key[cnt_i + 1][15] = key[cnt_i + 1][11] ^ m ^ key[cnt_i][15] ^ m4p;
     }
 
-    /******************  10¶ó¿îµå Å°  ******************/
-    // ÀÓ½Ã °ª ÀúÀå
+    /******************  10ë¼ìš´ë“œ í‚¤  ******************/
+    // ìž„ì‹œ ê°’ ì €ìž¥
     temp[0] = M_Sbox[key[9][13] ^ m2p] ^ RC[9] ^ key[9][0];
     temp[1] = M_Sbox[key[9][14] ^ m3p] ^ key[9][1];
     temp[2] = M_Sbox[key[9][15] ^ m4p] ^ key[9][2];
@@ -329,7 +329,7 @@ void Masked_KeySchedule128(unsigned char key[][16], unsigned char m, unsigned ch
     key[10][10] = temp[2] ^ m;
     key[10][11] = temp[3] ^ m;
 
-    /******************  ¸ðµç ¶ó¿îµåÅ° Ãâ·Â ******************/
+    /******************  ëª¨ë“  ë¼ìš´ë“œí‚¤ ì¶œë ¥ ******************/
     printf("===== Masked Round Keys =====\n");
     for (int round = 0; round <= 10; round++)
     {
@@ -365,7 +365,7 @@ void Masked_ShiftRows(unsigned char state[], unsigned char mp, unsigned char m1,
 {
     unsigned char buf;
 
-    // ±âÁ¸ ShiftRows ¼öÇà
+    // ê¸°ì¡´ ShiftRows ìˆ˜í–‰
     buf = state[1];
     state[1] = state[5];
     state[5] = state[9];
@@ -385,7 +385,7 @@ void Masked_ShiftRows(unsigned char state[], unsigned char mp, unsigned char m1,
     state[7] = state[3];
     state[3] = buf;
 
-    // ¸¶½ºÅ· °ª °è»ê - (X ^ mp(ÀÔ·Â°ª)) ^ m1 ^ mp == X ^ m1  (mp°¡ »ó¼âµÇÁö¸¸, °è»ê °úÁ¤Àº ¾ÈÀü¼ºÀ» À§ÇØ À¯Áö)
+    // ë§ˆìŠ¤í‚¹ ê°’ ê³„ì‚° - (X ^ mp(ìž…ë ¥ê°’)) ^ m1 ^ mp == X ^ m1  (mpê°€ ìƒì‡„ë˜ì§€ë§Œ, ê³„ì‚° ê³¼ì •ì€ ì•ˆì „ì„±ì„ ìœ„í•´ ìœ ì§€)
     state[0] ^= m1 ^ mp;
     state[1] ^= m2 ^ mp;
     state[2] ^= m3 ^ mp;
@@ -411,24 +411,14 @@ void Masked_ShiftRows(unsigned char state[], unsigned char mp, unsigned char m1,
 void AES128_enc(AES_STATE_t C, AES_STATE_t P, AES128_KEY_t K128)
 {
     unsigned char m, mp, m1, m2, m3, m4, m1p, m2p, m3p, m4p;
-    /*
-    uint32_t seed = 0;
-    for (int i = 0; i < 16; i++) {
-        seed = (seed * 131) + P[i]; // Æò¹® ¹ÙÀÌÆ®µéÀ» Â÷·Ê´ë·Î °öÇÏ°í ´õÇÏ¸é¼­ ÇÏ³ªÀÇ 32ºñÆ® ¼ýÀÚ·Î ¼¯¾î³¿
-        // 131, 33, 5381, 65599 °°Àº ¼ö´Â ÀÌ·± Æú¸®³ë¹Ì¾ó ÇØ½Ã(polynomial rolling hash)¿¡¼­ ÀÚÁÖ ¾²´Â Àû´çÈ÷ Å« È¦¼ö
-        // 1. Ã¹ seed = 0¿¡ PT[0]À» ´õÇÔ
-        // 2. ´ÙÀ½ ¹ÙÀÌÆ®ºÎÅÍ´Â seed¸¦ 131¹è ÇØÁØ ´ÙÀ½ ±× ¹ÙÀÌÆ®¸¦ ´õÇÔ
-    }
-    srand(seed);  // Æò¹® ±â¹Ý ³­¼ö ½Ãµå ¼³Á¤
 
-    // ¸¶½ºÅ· °ª »ý¼º
+    // ë§ˆìŠ¤í‚¹ ê°’ ìƒì„±
     make_masking_value(&m, &mp, &m1, &m2, &m3, &m4);
     calculate_mp_value(m1, m2, m3, m4, &m1p, &m2p, &m3p, &m4p);
     print_masking_values(m, mp, m1, m2, m3, m4, m1p, m2p, m3p, m4p);
-    build_msbox(M_Sbox, m, mp); // M_Sbox »ý¼º
-    */
+    build_msbox(M_Sbox, m, mp); // M_Sbox ìƒì„±
+
     unsigned char RoundKey[11][16];
-    
     for (int i = 0; i < 16; i++)
     {
         RoundKey[0][i] = K128[i];
@@ -439,9 +429,9 @@ void AES128_enc(AES_STATE_t C, AES_STATE_t P, AES128_KEY_t K128)
     printf("masked Plaintext : ");
     Masked_Plaintext(C, m1p, m2p, m3p, m4p);
     printf("AR 0 : ");
-    AddRoundKey(C, RoundKey[0]); // Å°½ºÄÉÁì¿¡ ^(m') Àû¿ëµÈ »óÅÂÀÌ¹Ç·Î masking AddRoundKey´Â µû·Î ±¸Çö ¾ÈÇØµµ µÊ
+    AddRoundKey(C, RoundKey[0]); // í‚¤ìŠ¤ì¼€ì¥´ì— ^(m') ì ìš©ëœ ìƒíƒœì´ë¯€ë¡œ masking AddRoundKeyëŠ” ë”°ë¡œ êµ¬í˜„ ì•ˆí•´ë„ ë¨
     printf("--------------------------------\n");
-    //1~9 ¶ó¿îµå
+    //1~9 ë¼ìš´ë“œ
     for (int round = 0; round < 9; round++)
     {
         printf("masked SB %d : ", round + 1);
@@ -449,13 +439,13 @@ void AES128_enc(AES_STATE_t C, AES_STATE_t P, AES128_KEY_t K128)
         printf("masked SR %d : ", round + 1);
         Masked_ShiftRows(C, mp, m1, m2, m3, m4);
         printf("masked MC %d : ", round + 1);
-        MixColumns(C); // masking Àû¿ë ¾øÀÌ ±âÁ¸ MixColumns ±×´ë·Î »ç¿ë
+        MixColumns(C); // masking ì ìš© ì—†ì´ ê¸°ì¡´ MixColumns ê·¸ëŒ€ë¡œ ì‚¬ìš©
         printf("AR %d : ", round + 1);
         AddRoundKey(C, RoundKey[round + 1]);
         printf("--------------------------------\n");
     }
 
-    //¸¶Áö¸· 10 ¶ó¿îµå
+    //ë§ˆì§€ë§‰ 10 ë¼ìš´ë“œ
     printf("masked SB 10 : ");
     Masked_SubBytes(C);
     printf("masked SR 10 : ");
